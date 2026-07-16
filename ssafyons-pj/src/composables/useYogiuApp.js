@@ -1,4 +1,8 @@
 import 'dotenv/config'
+import express from 'express'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
 import { CATEGORY_PLACEHOLDER, REAL_SPOTS_DATA } from '../data/spots.js';
 import { loadExternalSpotData } from '../services/spotDataService.js';
