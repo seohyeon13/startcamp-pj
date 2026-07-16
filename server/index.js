@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createServer as createViteServer } from 'vite'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const rootPath = path.resolve(__dirname, '..')
@@ -19,7 +20,7 @@ app.disable('x-powered-by')
 app.use(express.json({ limit: '1mb' }))
 
 app.get('/api/health', (_req, res) => {
-  return res.json({
+  res.json({
     ok: true,
     mode: isProduction ? 'production' : 'development',
     openaiConfigured: Boolean(apiKey),
@@ -73,13 +74,6 @@ app.post('/api/openai/chat', async (req, res) => {
       },
     }))
 
-    if (!response.ok) {
-      console.error('OpenAI API error:', {
-        status: response.status,
-        data,
-      })
-    }
-
     return res.status(response.status).json(data)
   } catch (error) {
     console.error('OpenAI proxy error:', error)
@@ -106,21 +100,16 @@ async function startServer() {
 
       return res.sendFile(
         path.join(distPath, 'index.html'),
-        (error) => {
-          if (error) {
-            next(error)
-          }
-        },
       )
     })
   } else {
-    const { createServer: createViteServer } =
-      await import('vite')
-
     vite = await createViteServer({
       root: rootPath,
       server: {
         middlewareMode: true,
+        hmr: {
+          server: undefined,
+        },
       },
       appType: 'spa',
     })
@@ -129,53 +118,24 @@ async function startServer() {
   }
 
   app.use('/api', (_req, res) => {
-    return res.status(404).json({
+    res.status(404).json({
       error: {
         message: '요청한 API 경로를 찾을 수 없습니다.',
       },
     })
   })
 
-  app.use((error, _req, res, _next) => {
-    console.error('Server error:', error)
-
-    if (res.headersSent) {
-      return
-    }
-
-    return res.status(500).json({
-      error: {
-        message: '서버 내부 오류가 발생했습니다.',
-      },
-    })
-  })
-
   const server = app.listen(port, () => {
-    console.log(`YOGIU 통합 서버: http://localhost:${port}`)
+    console.log(`YOGIU 단일 서버: http://localhost:${port}`)
     console.log(
       `실행 모드: ${
         isProduction ? 'production' : 'development'
       }`,
     )
     console.log(`OpenAI configured: ${Boolean(apiKey)}`)
-    console.log(`OpenAI model: ${defaultModel}`)
-  })
-
-  server.on('error', (error) => {
-    if (error.code === 'EADDRINUSE') {
-      console.error(
-        `포트 ${port}가 이미 사용 중입니다. 기존 서버를 종료하거나 SERVER_PORT를 변경하세요.`,
-      )
-    } else {
-      console.error('서버 실행 오류:', error)
-    }
-
-    process.exit(1)
   })
 
   const shutdown = async () => {
-    console.log('\n서버를 종료합니다.')
-
     server.close(async () => {
       if (vite) {
         await vite.close()
